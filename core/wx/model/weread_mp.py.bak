@@ -65,7 +65,7 @@ def _raise_response_error(payload: dict):
     raise WereadMPAPIError(
         code,
         message,
-        retriable=code not in (-2012, -2010),
+        retriable=code not in (-2041, -2012, -2010),
     )
 
 
@@ -501,45 +501,17 @@ class MpsWereadMP(MpsWeread):
                     # 列表接口本身可用（已成功翻页），属于正文缺失或补抓不完整
                     # 等真实错误，直接上抛，下次任务重试。
                     raise
-                # -2041 是微信读书短期限流，先做指数退避重试，再降级 cover
-                list_exc = exc
-                if getattr(exc, 'code', None) == -2041:
-                    for attempt, wait_secs in enumerate((5, 10, 20), start=1):
-                        print_warning(
-                            f"[{Mps_title}] 文章列表接口限流(-2041)，{wait_secs}s 后重试"
-                            f" ({attempt}/3)..."
-                        )
-                        time.sleep(wait_secs)
-                        try:
-                            self.response_valid = False
-                            latest_publish_time = self._collect_via_article_list(
-                                book_id,
-                                Mps_id,
-                                Mps_title,
-                                gather_content,
-                                start_page,
-                                MaxPage,
-                                CallBack=CallBack,
-                                Item_Over_CallBack=Item_Over_CallBack,
-                            )
-                            list_exc = None
-                            break
-                        except WereadMPAPIError as retry_exc:
-                            list_exc = retry_exc
-                            if getattr(retry_exc, 'code', None) != -2041:
-                                break  # 换了错误码，不再是限流，退出重试
-                if list_exc is not None:
-                    print_warning(
-                        f"[{Mps_title}] 文章列表接口不可用({list_exc})，回退到仅取最新一篇"
-                    )
-                    latest_publish_time = self._collect_latest_via_cover(
-                        book_id,
-                        Mps_id,
-                        Mps_title,
-                        gather_content,
-                        CallBack=CallBack,
-                        Item_Over_CallBack=Item_Over_CallBack,
-                    )
+                print_warning(
+                    f"[{Mps_title}] 文章列表接口不可用({exc})，回退到仅取最新一篇"
+                )
+                latest_publish_time = self._collect_latest_via_cover(
+                    book_id,
+                    Mps_id,
+                    Mps_title,
+                    gather_content,
+                    CallBack=CallBack,
+                    Item_Over_CallBack=Item_Over_CallBack,
+                )
 
             self.update_mps(
                 Mps_id,
